@@ -174,6 +174,9 @@ function enableControls() {
     targetSizeInput.disabled = false;
     optimizeSizeButton.disabled = false;
     // downloadLink.style.display is handled in handleImageUpload and updatePreview
+    if (originalImage) { // Only show download link if an image is loaded
+        downloadLink.style.display = 'inline-block';
+    }
 }
 
 // Function to disable controls
