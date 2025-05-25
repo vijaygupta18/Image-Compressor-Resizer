@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Compressor & Resizer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Image Compressor & Resizer</h1>
+
+        <div>
+            <label for="imageUpload">Upload Image:</label>
+            <input type="file" id="imageUpload" accept="image/*">
+        </div>
+
+        <div class="controls-group">
+            <label for="qualitySlider">Quality:</label>
+            <input type="range" id="qualitySlider" min="10" max="100" value="90">
+            <span id="qualityValue">90%</span>
+        </div>
+
+        <div class="controls-group">
+            <label>Resize:</label>
+            <label for="widthInput">Width:</label>
+            <input type="number" id="widthInput" placeholder="Auto">
+            <label for="heightInput">Height:</label>
+            <input type="number" id="heightInput" placeholder="Auto">
+            <button id="aspectRatioLock">🔒</button>
+        </div>
+
+        <div>
+            <canvas id="previewCanvas"></canvas>
+            <p>Current Dimensions: <span id="currentDimensions">-- x --</span></p>
+        </div>
+
+        <div>
+            <a id="downloadLink" download="compressed_resized_image.jpg">Download Image</a>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 

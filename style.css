@@ -1,0 +1,271 @@
+body {
+    font-family: sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f4f4;
+    color: #333;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    box-sizing: border-box; /* Include padding in element's total width and height */
+}
+
+.container {
+    background-color: #fff;
+    background: linear-gradient(to bottom right, #ffffff, #f0f0f0); /* Subtle gradient */
+    padding: 30px;
+    border-radius: 12px; /* More rounded corners */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15); /* Stronger shadow */
+    width: 100%;
+    max-width: 700px;
+    text-align: center;
+    margin-top: 20px; /* Add some space from the top */
+    margin-bottom: 20px;
+}
+
+h1 {
+    color: #0056b3;
+    margin-top: 0;
+    margin-bottom: 30px; /* More space below heading */
+    font-size: 2em;
+    font-weight: 600;
+}
+
+div {
+    margin-bottom: 25px; /* More space between sections */
+    padding: 20px; /* More padding inside sections */
+    border: none; /* Remove border */
+    border-radius: 8px; /* Rounded corners for sections */
+    background-color: #ffffff; /* White background for sections */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); /* Subtle shadow for sections */
+    text-align: left;
+    transition: box-shadow 0.3s ease; /* Smooth shadow transition */
+}
+
+div:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); /* Enhance shadow on hover */
+}
+
+label {
+    display: inline-block;
+    margin-bottom: 10px; /* More space below labels */
+    font-weight: bold;
+    margin-right: 10px;
+    color: #555; /* Slightly darker label color */
+}
+
+input[type="file"],
+input[type="number"],
+input[type="range"] {
+    padding: 10px; /* More padding */
+    border: 1px solid #ddd; /* Lighter border */
+    border-radius: 4px;
+    margin-right: 10px;
+    vertical-align: middle;
+    box-sizing: border-box; /* Include padding in size */
+    transition: border-color 0.2s ease;
+}
+
+input[type="file"] {
+     border: 1px solid #ddd; /* Add a subtle border back for consistency */
+     background-color: #eee; /* Light background */
+     padding: 10px; /* Consistent padding */
+     cursor: pointer;
+}
+
+input[type="file"]:hover {
+    border-color: #bbb;
+}
+
+input[type="number"]:focus,
+input[type="range"]:focus {
+    outline: none;
+    border-color: #007bff; /* Highlight border on focus */
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.2); /* Subtle glow on focus */
+}
+
+input[type="number"] {
+    width: 100px; /* Slightly wider number inputs */
+}
+
+#qualitySlider {
+    flex-grow: 1;
+    margin-right: 10px; /* Keep some margin for slider */
+    -webkit-appearance: none; /* Remove default slider style */
+    appearance: none;
+    height: 8px; /* Make slider thinner */
+    background: #ddd; /* Slider track background */
+    outline: none;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+#qualitySlider:hover {
+    opacity: 1;
+}
+
+#qualitySlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px; /* Slider thumb size */
+    height: 20px;
+    background: #007bff; /* Slider thumb color */
+    cursor: pointer;
+    border-radius: 50%; /* Round thumb */
+    transition: background 0.2s ease;
+}
+
+#qualitySlider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #007bff;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: background 0.2s ease;
+}
+
+#qualitySlider::-webkit-slider-thumb:hover,
+#qualitySlider::-moz-range-thumb:hover {
+    background: #0056b3;
+}
+
+#qualityValue {
+    display: inline-block;
+    min-width: 40px; /* Slightly wider for clarity */
+    font-weight: normal;
+    color: #555;
+}
+
+button {
+    padding: 10px 15px; /* More padding */
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    vertical-align: middle;
+    transition: background-color 0.2s ease, opacity 0.2s ease; /* Add opacity transition */
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+canvas {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #ccc;
+    margin-top: 15px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    background-color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); /* Subtle shadow for canvas */
+}
+
+#currentDimensions {
+    margin-top: 15px; /* More space above dimensions */
+    font-weight: bold;
+    text-align: center;
+    display: block;
+    color: #555;
+}
+
+#downloadLink {
+    display: inline-block;
+    margin-top: 30px; /* More space above download link */
+    padding: 15px 25px; /* More padding */
+    background-color: #28a745;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 1.2em; /* Larger font */
+    transition: background-color 0.2s ease, transform 0.1s ease; /* Add transform transition */
+}
+
+#downloadLink:hover {
+    background-color: #218838;
+    transform: translateY(-2px); /* Subtle lift effect */
+}
+
+#downloadLink:active {
+     transform: translateY(0); /* Press down effect */
+}
+
+/* Flexbox for better control alignment */
+.controls-group {
+     display: flex;
+     align-items: center;
+     flex-wrap: wrap;
+     gap: 15px; /* Increased gap */
+     justify-content: flex-start; /* Align items to the start */
+}
+
+.controls-group label {
+    flex-shrink: 0; /* Prevent labels from shrinking */
+}
+
+.controls-group input[type="number"] {
+     flex-shrink: 0;
+}
+
+.controls-group #qualitySlider {
+     flex-grow: 1;
+     min-width: 150px; /* Ensure slider has a minimum width */
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .container {
+        padding: 20px;
+    }
+
+    h1 {
+        font-size: 1.6em;
+    }
+
+    div {
+        padding: 15px;
+    }
+
+    .controls-group {
+        flex-direction: column; /* Stack controls vertically on small screens */
+        align-items: flex-start;
+    }
+
+    .controls-group label,
+    .controls-group input[type="number"],
+    .controls-group #qualitySlider,
+    .controls-group button {
+        width: 100%; /* Make controls take full width */
+        margin-right: 0; /* Remove margin */
+        margin-bottom: 10px; /* Add bottom margin when stacked */
+    }
+
+    #qualityValue {
+        width: 100%;
+        text-align: left;
+        margin-left: 0;
+        margin-top: 5px;
+    }
+
+    #aspectRatioLock {
+        width: auto; /* Auto width for the button */
+        align-self: flex-end; /* Align button to the right */
+    }
+
+    #downloadLink {
+        width: 100%;
+        text-align: center;
+        padding: 12px 0;
+    }
+} 
