@@ -223,6 +223,19 @@ canvas {
      min-width: 150px; /* Ensure slider has a minimum width */
 }
 
+#targetSizeInput {
+    width: 100px; /* Same width as dimension inputs */
+}
+
+#optimizeSizeButton {
+    background-color: #ffc107; /* Yellow color for optimize */
+    color: #212529;
+}
+
+#optimizeSizeButton:hover {
+    background-color: #e0a800;
+}
+
 /* Responsive adjustments */
 @media (max-width: 600px) {
     .container {

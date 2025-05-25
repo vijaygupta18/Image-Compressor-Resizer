@@ -9,6 +9,8 @@ const previewCanvas = document.getElementById('previewCanvas');
 const downloadLink = document.getElementById('downloadLink');
 const ctx = previewCanvas.getContext('2d');
 const currentDimensionsSpan = document.getElementById('currentDimensions');
+const targetSizeInput = document.getElementById('targetSizeInput');
+const optimizeSizeButton = document.getElementById('optimizeSizeButton');
 
 // Variables to store original image data and settings
 let originalImage = null;
@@ -169,6 +171,8 @@ function enableControls() {
     widthInput.disabled = false;
     heightInput.disabled = false;
     aspectRatioLock.disabled = false;
+    targetSizeInput.disabled = false;
+    optimizeSizeButton.disabled = false;
     // downloadLink.style.display is handled in handleImageUpload and updatePreview
 }
 
@@ -178,5 +182,83 @@ function disableControls() {
     widthInput.disabled = true;
     heightInput.disabled = true;
     aspectRatioLock.disabled = true;
+    targetSizeInput.disabled = true;
+    optimizeSizeButton.disabled = true;
     downloadLink.style.display = 'none'; // Hide download link when no image
-} 
+}
+
+// Event listener for optimize size button
+optimizeSizeButton.addEventListener('click', handleOptimizeSize);
+
+// Handles the optimize size button click
+async function handleOptimizeSize() {
+    if (!originalImage) return;
+
+    const targetKB = parseInt(targetSizeInput.value);
+    if (isNaN(targetKB) || targetKB <= 0) {
+        alert('Please enter a valid target size in KB.');
+        return;
+    }
+
+    const targetBytes = targetKB * 1024;
+    disableControls(); // Disable controls during optimization
+    optimizeSizeButton.textContent = 'Optimizing...';
+
+    // Binary search for optimal quality
+    let minQuality = 10;
+    let maxQuality = 100;
+    let bestQuality = qualitySlider.value; // Start with current quality as a potential best
+    let currentSize = Infinity; // Initialize with a large value
+
+    // Perform a fixed number of iterations for binary search convergence
+    for (let i = 0; i < 15; i++) { // 15 iterations are usually enough for 0-100 range
+        const midQuality = Math.round((minQuality + maxQuality) / 2);
+        if (minQuality >= maxQuality) { // Stop if range is too small or inverted
+            bestQuality = midQuality;
+            break;
+        }
+
+        // Render with current quality and get size
+        previewCanvas.width = parseInt(widthInput.value) || originalImage.width;
+        previewCanvas.height = parseInt(heightInput.value) || originalImage.height;
+        ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        ctx.drawImage(originalImage, 0, 0, previewCanvas.width, previewCanvas.height);
+
+        // Get Blob size (async operation)
+        currentSize = await new Promise(resolve => {
+            previewCanvas.toBlob(blob => {
+                resolve(blob ? blob.size : Infinity);
+            }, 'image/jpeg', midQuality / 100);
+        });
+
+        // Adjust search range
+        if (currentSize > targetBytes) {
+            maxQuality = midQuality -1 ;
+        } else {
+            minQuality = midQuality + 1 ;
+            // If the current size is less than or equal to the target, this is a potential best quality
+            bestQuality = midQuality; // Store the quality that resulted in a size <= target
+        }
+         // In case we undershoot and then the size is too small, we still want the last quality that was <= target
+        if (currentSize <= targetBytes) {
+             bestQuality = midQuality;
+        }
+
+        // Small delay to allow UI to update (optional but can improve perceived responsiveness)
+        await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    // After search, set the quality slider to the best quality found
+    qualitySlider.value = bestQuality;
+    qualityValue.textContent = bestQuality + '%';
+
+    // Update the preview and download link with the final quality
+    updatePreview();
+
+    optimizeSizeButton.textContent = 'Optimize Quality';
+    enableControls(); // Re-enable controls
+}
+
+// Initial setup or maybe hide controls until image is loaded?
+// For now, they are visible by default. You could add logic here
+// to hide dimension/quality controls and the download link initially. 
