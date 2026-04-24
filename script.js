@@ -1,267 +1,393 @@
-// Get references to HTML elements
-const imageUpload = document.getElementById('imageUpload');
-const qualitySlider = document.getElementById('qualitySlider');
-const qualityValue = document.getElementById('qualityValue');
-const widthInput = document.getElementById('widthInput');
-const heightInput = document.getElementById('heightInput');
-const aspectRatioLock = document.getElementById('aspectRatioLock');
-const previewCanvas = document.getElementById('previewCanvas');
-const downloadLink = document.getElementById('downloadLink');
-const ctx = previewCanvas.getContext('2d');
-const currentDimensionsSpan = document.getElementById('currentDimensions');
-const targetSizeInput = document.getElementById('targetSizeInput');
-const optimizeSizeButton = document.getElementById('optimizeSizeButton');
+/* ---------------------------------------------------------
+   Image Compressor & Resizer — vijay.tools
+   Preserves all original functionality: quality slider, width/height,
+   aspect ratio lock, target-size optimizer. Adds: drag-drop, presets,
+   file-size stats, toast feedback, and the shared BMC support dialog.
+--------------------------------------------------------- */
 
-// Variables to store original image data and settings
-let originalImage = null;
-let aspectRatio = 1;
-let isAspectRatioLocked = true;
+// DOM refs
+const imageUpload      = document.getElementById('imageUpload');
+const dropZone         = document.getElementById('dropZone');
+const emptyState       = document.getElementById('emptyState');
+const workspace        = document.getElementById('workspace');
+const fileNameEl       = document.getElementById('fileName');
+const changeFileBtn    = document.getElementById('changeFile');
+const originalSizeEl   = document.getElementById('originalSize');
+const compressedSizeEl = document.getElementById('compressedSize');
+const savingsEl        = document.getElementById('savings');
+
+const qualitySlider    = document.getElementById('qualitySlider');
+const qualityValue     = document.getElementById('qualityValue');
+const widthInput       = document.getElementById('widthInput');
+const heightInput      = document.getElementById('heightInput');
+const aspectRatioLock  = document.getElementById('aspectRatioLock');
+
+const previewCanvas    = document.getElementById('previewCanvas');
+const ctx              = previewCanvas.getContext('2d');
+const currentDimensionsSpan = document.getElementById('currentDimensions');
+const formatBadge      = document.getElementById('formatBadge');
+
+const targetSizeInput  = document.getElementById('targetSizeInput');
+const optimizeSizeButton = document.getElementById('optimizeSizeButton');
+const downloadLink     = document.getElementById('downloadLink');
+
+// State
+let originalImage   = null;
+let aspectRatio     = 1;
+let isAspectLocked  = true;
 let originalFileName = '';
 let originalFileType = '';
+let originalSizeBytes = 0;
+let lastBlobSize = 0;
 
-// Initial state for download link (hidden until image is loaded)
-downloadLink.style.display = 'none';
-// Disable controls initially
-disableControls();
+// ---------------------------------------------------------
+// Upload wiring
+// ---------------------------------------------------------
+imageUpload.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) loadFile(file);
+    e.target.value = '';
+});
+changeFileBtn.addEventListener('click', () => imageUpload.click());
+dropZone.addEventListener('click', () => imageUpload.click());
+dropZone.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); imageUpload.click(); }
+});
 
-// Event listener for file upload input
-imageUpload.addEventListener('change', handleImageUpload);
+['dragenter', 'dragover'].forEach(evt => {
+    dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('dragging');
+    });
+});
+['dragleave', 'drop'].forEach(evt => {
+    dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('dragging');
+    });
+});
+dropZone.addEventListener('drop', e => {
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) loadFile(file);
+    else if (file) toast('That file isn\'t an image', 'danger');
+});
 
-// Handles image file selection
-function handleImageUpload(event) {
-    const file = event.target.files[0];
-
-    if (file) {
-        originalFileName = file.name;
-        originalFileType = file.type;
-        const reader = new FileReader();
-
-        // When the file is read
-        reader.onload = function(e) {
-            const img = new Image();
-            // When the image is loaded
-            img.onload = function() {
-                originalImage = img;
-                aspectRatio = originalImage.width / originalImage.height;
-                // Set initial dimensions to original image size
-                widthInput.value = originalImage.width;
-                heightInput.value = originalImage.height;
-                // Reset quality to default (90) on new upload
-                qualitySlider.value = 90;
-                qualityValue.textContent = '90%';
-                // Update the preview canvas
-                updatePreview();
-                // Show the download link
-                downloadLink.style.display = 'inline-block';
-                // Enable controls
-                enableControls();
-            }
-            // Set the image source to the data URL
-            img.src = e.target.result;
+// Accept drops anywhere on page once workspace is active (the preview area)
+document.addEventListener('dragover', e => { e.preventDefault(); });
+document.addEventListener('drop', e => {
+    if (emptyState.hidden) {
+        const file = e.dataTransfer.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+            e.preventDefault();
+            loadFile(file);
         }
-
-        // Read the file as a data URL
-        reader.readAsDataURL(file);
     }
-}
+});
 
-// Updates the canvas preview and download link based on current settings
-function updatePreview() {
-    if (!originalImage) {
-        currentDimensionsSpan.textContent = '-- x --';
+function loadFile(file) {
+    if (!file.type.startsWith('image/')) {
+        toast('Please choose an image file', 'danger');
         return;
     }
+    originalFileName  = file.name;
+    originalFileType  = file.type;
+    originalSizeBytes = file.size;
 
-    let targetWidth = parseInt(widthInput.value) || originalImage.width;
-    let targetHeight = parseInt(heightInput.value) || originalImage.height;
-    // Get quality from slider (0.1 to 1.0)
-    const quality = parseInt(qualitySlider.value) / 100;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+            originalImage = img;
+            aspectRatio = img.width / img.height;
+            widthInput.value  = img.width;
+            heightInput.value = img.height;
+            qualitySlider.value = 90;
+            qualityValue.textContent = '90%';
 
-    // Apply aspect ratio lock logic
-    if (isAspectRatioLocked) {
-        if (widthInput.value && !heightInput.value) {
-            // If width is set, calculate height based on aspect ratio
-            targetHeight = targetWidth / aspectRatio;
-            heightInput.value = Math.round(targetHeight);
-        } else if (heightInput.value && !widthInput.value) {
-             // If height is set, calculate width based on aspect ratio
-             targetWidth = targetHeight * aspectRatio;
-             widthInput.value = Math.round(targetWidth);
-        } else if (widthInput.value && heightInput.value) {
-            // If both are set, adjust height based on width if locked
-             targetHeight = targetWidth / aspectRatio;
-             heightInput.value = Math.round(targetHeight);
-        }
-    } else {
-         // If not locked and both are set, use the user's values
-         if (!widthInput.value && heightInput.value) {
-             targetWidth = targetHeight * aspectRatio;
-             widthInput.value = Math.round(targetWidth);
-         } else if (widthInput.value && !heightInput.value) {
-            targetHeight = targetWidth / aspectRatio;
-            heightInput.value = Math.round(targetHeight);
-         } else if (!widthInput.value && !heightInput.value) {
-            // If neither is set, revert to original dimensions
-            targetWidth = originalImage.width;
-            targetHeight = originalImage.height;
-            widthInput.value = targetWidth;
-            heightInput.value = targetHeight;
-         }
-    }
+            // Show workspace
+            emptyState.hidden = true;
+            workspace.hidden = false;
+            fileNameEl.textContent = originalFileName;
+            originalSizeEl.textContent = formatBytes(originalSizeBytes);
+            formatBadge.textContent = originalFileType === 'image/png' ? 'PNG' : 'JPEG';
 
-    // Set canvas dimensions to target dimensions
-    previewCanvas.width = targetWidth;
-    previewCanvas.height = targetHeight;
-
-    // Clear canvas and draw the image with new dimensions
-    ctx.clearRect(0, 0, targetWidth, targetHeight);
-    ctx.drawImage(originalImage, 0, 0, targetWidth, targetHeight);
-
-    // Determine output format based on original file type.
-    // JPEG is generally better for compression with quality setting.
-    // Use PNG if the original was PNG to preserve transparency if needed, but quality slider won't affect it for PNG.
-    const outputMimeType = originalFileType === 'image/png' ? 'image/png' : 'image/jpeg';
-    const dataUrl = previewCanvas.toDataURL(outputMimeType, quality);
-
-    // Update download link href with the generated data URL
-    downloadLink.href = dataUrl;
-
-    // Generate a dynamic download filename
-    const originalNameWithoutExt = originalFileName.split('.').slice(0, -1).join('.');
-    const outputExtension = outputMimeType.split('/')[1];
-    downloadLink.download = `${originalNameWithoutExt}_${Math.round(targetWidth)}x${Math.round(targetHeight)}_q${Math.round(quality * 100)}.${outputExtension}`;
-
-    // Update displayed dimensions
-    currentDimensionsSpan.textContent = `${Math.round(targetWidth)} x ${Math.round(targetHeight)}`;
+            updateActivePreset(1);
+            updatePreview();
+            toast(`Loaded ${img.width}×${img.height}`, 'success');
+        };
+        img.onerror = () => toast('Could not read image', 'danger');
+        img.src = e.target.result;
+    };
+    reader.onerror = () => toast('Could not read file', 'danger');
+    reader.readAsDataURL(file);
 }
 
-// Event Listeners for controls
-// Update quality value display and preview on slider change
-qualitySlider.addEventListener('input', function() {
-    qualityValue.textContent = this.value + '%';
+// ---------------------------------------------------------
+// Controls
+// ---------------------------------------------------------
+qualitySlider.addEventListener('input', () => {
+    qualityValue.textContent = qualitySlider.value + '%';
     updatePreview();
 });
 
-// Update preview on dimension input changes
-widthInput.addEventListener('input', updatePreview);
-heightInput.addEventListener('input', updatePreview);
-
-// Event listener for aspect ratio lock button
-aspectRatioLock.addEventListener('click', toggleAspectRatioLock);
-
-// Toggles the aspect ratio lock state
-function toggleAspectRatioLock() {
-    isAspectRatioLocked = !isAspectRatioLocked;
-    // Change button text/emoji
-    aspectRatioLock.textContent = isAspectRatioLocked ? '🔒' : '🔓';
-    // When toggling to locked, potentially re-calculate the other dimension
-    if (isAspectRatioLocked) {
-         if (widthInput.value) {
-             heightInput.value = Math.round(parseInt(widthInput.value) / aspectRatio);
-         } else if (heightInput.value) {
-             widthInput.value = Math.round(parseInt(heightInput.value) * aspectRatio);
-         }
+widthInput.addEventListener('input', () => {
+    if (isAspectLocked && widthInput.value) {
+        heightInput.value = Math.max(1, Math.round(parseInt(widthInput.value) / aspectRatio));
     }
-    updatePreview(); // Update preview to reflect potential dimension changes
-}
-
-// Function to enable controls
-function enableControls() {
-    qualitySlider.disabled = false;
-    widthInput.disabled = false;
-    heightInput.disabled = false;
-    aspectRatioLock.disabled = false;
-    targetSizeInput.disabled = false;
-    optimizeSizeButton.disabled = false;
-    // downloadLink.style.display is handled in handleImageUpload and updatePreview
-    if (originalImage) { // Only show download link if an image is loaded
-        downloadLink.style.display = 'inline-block';
+    syncPresetFromCurrent();
+    updatePreview();
+});
+heightInput.addEventListener('input', () => {
+    if (isAspectLocked && heightInput.value) {
+        widthInput.value = Math.max(1, Math.round(parseInt(heightInput.value) * aspectRatio));
     }
+    syncPresetFromCurrent();
+    updatePreview();
+});
+
+aspectRatioLock.addEventListener('click', () => {
+    isAspectLocked = !isAspectLocked;
+    aspectRatioLock.setAttribute('aria-pressed', String(isAspectLocked));
+    aspectRatioLock.setAttribute('title', isAspectLocked ? 'Aspect ratio locked' : 'Aspect ratio unlocked');
+    if (isAspectLocked && widthInput.value) {
+        heightInput.value = Math.max(1, Math.round(parseInt(widthInput.value) / aspectRatio));
+        updatePreview();
+    }
+});
+
+document.querySelectorAll('.preset-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (!originalImage) return;
+        const scale = parseFloat(btn.dataset.scale);
+        widthInput.value  = Math.max(1, Math.round(originalImage.width * scale));
+        heightInput.value = Math.max(1, Math.round(originalImage.height * scale));
+        updateActivePreset(scale);
+        updatePreview();
+    });
+});
+
+function updateActivePreset(scale) {
+    document.querySelectorAll('.preset-chip').forEach(btn => {
+        btn.classList.toggle('active', parseFloat(btn.dataset.scale) === scale);
+    });
+}
+function syncPresetFromCurrent() {
+    if (!originalImage) return;
+    const w = parseInt(widthInput.value);
+    if (!w) { updateActivePreset(NaN); return; }
+    const scale = w / originalImage.width;
+    const matched = [1, 0.75, 0.5, 0.25].find(s => Math.abs(scale - s) < 0.01);
+    updateActivePreset(matched ?? NaN);
 }
 
-// Function to disable controls
-function disableControls() {
-    qualitySlider.disabled = true;
-    widthInput.disabled = true;
-    heightInput.disabled = true;
-    aspectRatioLock.disabled = true;
-    targetSizeInput.disabled = true;
-    optimizeSizeButton.disabled = true;
-    downloadLink.style.display = 'none'; // Hide download link when no image
+// ---------------------------------------------------------
+// Render / preview
+// ---------------------------------------------------------
+function renderToCanvas(w, h) {
+    previewCanvas.width  = w;
+    previewCanvas.height = h;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(originalImage, 0, 0, w, h);
 }
 
-// Event listener for optimize size button
-optimizeSizeButton.addEventListener('click', handleOptimizeSize);
+function currentMimeType() {
+    return originalFileType === 'image/png' ? 'image/png' : 'image/jpeg';
+}
 
-// Handles the optimize size button click
-async function handleOptimizeSize() {
+function updatePreview() {
     if (!originalImage) return;
 
-    const targetKB = parseInt(targetSizeInput.value);
-    if (isNaN(targetKB) || targetKB <= 0) {
-        alert('Please enter a valid target size in KB.');
+    const targetW = Math.max(1, parseInt(widthInput.value) || originalImage.width);
+    const targetH = Math.max(1, parseInt(heightInput.value) || originalImage.height);
+    const quality = parseInt(qualitySlider.value) / 100;
+
+    renderToCanvas(targetW, targetH);
+
+    const mime = currentMimeType();
+    const dataUrl = previewCanvas.toDataURL(mime, quality);
+    downloadLink.href = dataUrl;
+
+    // Compute compressed size
+    previewCanvas.toBlob(blob => {
+        lastBlobSize = blob ? blob.size : 0;
+        compressedSizeEl.textContent = lastBlobSize ? formatBytes(lastBlobSize) : '—';
+        updateSavings();
+    }, mime, quality);
+
+    // Download filename
+    const baseName = originalFileName.split('.').slice(0, -1).join('.') || 'image';
+    const ext = mime.split('/')[1];
+    downloadLink.download = `${baseName}_${targetW}x${targetH}_q${Math.round(quality * 100)}.${ext}`;
+
+    currentDimensionsSpan.textContent = `${targetW} × ${targetH}`;
+    formatBadge.textContent = mime === 'image/png' ? 'PNG' : 'JPEG';
+}
+
+function updateSavings() {
+    if (!originalSizeBytes || !lastBlobSize) {
+        savingsEl.textContent = '—';
+        savingsEl.className = 'neutral';
+        return;
+    }
+    const pct = Math.round((1 - lastBlobSize / originalSizeBytes) * 100);
+    savingsEl.textContent = pct > 0 ? `−${pct}%` : pct < 0 ? `+${-pct}%` : '0%';
+    savingsEl.className = pct > 0 ? 'savings' : pct < -5 ? 'savings worse' : 'savings neutral';
+}
+
+// ---------------------------------------------------------
+// Target size optimizer (binary search on quality)
+// ---------------------------------------------------------
+optimizeSizeButton.addEventListener('click', handleOptimizeSize);
+
+async function handleOptimizeSize() {
+    if (!originalImage) return;
+    const targetKB = parseInt(targetSizeInput.value, 10);
+    if (!Number.isFinite(targetKB) || targetKB <= 0) {
+        toast('Enter a target size in KB', 'danger');
+        targetSizeInput.focus();
         return;
     }
 
-    const targetBytes = targetKB * 1024;
-    disableControls(); // Disable controls during optimization
-    optimizeSizeButton.textContent = 'Optimizing...';
-
-    // Binary search for optimal quality
-    let minQuality = 10;
-    let maxQuality = 100;
-    let bestQuality = qualitySlider.value; // Start with current quality as a potential best
-    let currentSize = Infinity; // Initialize with a large value
-
-    // Perform a fixed number of iterations for binary search convergence
-    for (let i = 0; i < 15; i++) { // 15 iterations are usually enough for 0-100 range
-        const midQuality = Math.round((minQuality + maxQuality) / 2);
-        if (minQuality >= maxQuality) { // Stop if range is too small or inverted
-            bestQuality = midQuality;
-            break;
-        }
-
-        // Render with current quality and get size
-        previewCanvas.width = parseInt(widthInput.value) || originalImage.width;
-        previewCanvas.height = parseInt(heightInput.value) || originalImage.height;
-        ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-        ctx.drawImage(originalImage, 0, 0, previewCanvas.width, previewCanvas.height);
-
-        // Get Blob size (async operation)
-        currentSize = await new Promise(resolve => {
-            previewCanvas.toBlob(blob => {
-                resolve(blob ? blob.size : Infinity);
-            }, 'image/jpeg', midQuality / 100);
-        });
-
-        // Adjust search range
-        if (currentSize > targetBytes) {
-            maxQuality = midQuality -1 ;
-        } else {
-            minQuality = midQuality + 1 ;
-            // If the current size is less than or equal to the target, this is a potential best quality
-            bestQuality = midQuality; // Store the quality that resulted in a size <= target
-        }
-         // In case we undershoot and then the size is too small, we still want the last quality that was <= target
-        if (currentSize <= targetBytes) {
-             bestQuality = midQuality;
-        }
-
-        // Small delay to allow UI to update (optional but can improve perceived responsiveness)
-        await new Promise(resolve => setTimeout(resolve, 10));
+    const mime = currentMimeType();
+    if (mime === 'image/png') {
+        toast('PNG is lossless — switching to JPEG for target-size optimization', 'default');
     }
 
-    // After search, set the quality slider to the best quality found
-    qualitySlider.value = bestQuality;
-    qualityValue.textContent = bestQuality + '%';
+    const targetBytes = targetKB * 1024;
+    const btnLabel = optimizeSizeButton.querySelector('.btn-label');
+    const originalText = btnLabel.textContent;
+    btnLabel.textContent = 'Optimizing…';
+    optimizeSizeButton.disabled = true;
 
-    // Update the preview and download link with the final quality
+    const targetW = Math.max(1, parseInt(widthInput.value) || originalImage.width);
+    const targetH = Math.max(1, parseInt(heightInput.value) || originalImage.height);
+    renderToCanvas(targetW, targetH);
+
+    let lo = 10, hi = 100, bestQ = 50, bestSize = Infinity;
+    for (let i = 0; i < 12; i++) {
+        const q = Math.round((lo + hi) / 2);
+        const size = await canvasSize(q / 100, 'image/jpeg');
+        if (size <= targetBytes) {
+            if (size > bestSize || !isFinite(bestSize) || Math.abs(size - targetBytes) < Math.abs(bestSize - targetBytes)) {
+                bestQ = q;
+                bestSize = size;
+            }
+            lo = q + 1;
+        } else {
+            hi = q - 1;
+        }
+        if (lo > hi) break;
+    }
+
+    qualitySlider.value = bestQ;
+    qualityValue.textContent = bestQ + '%';
     updatePreview();
 
-    optimizeSizeButton.textContent = 'Optimize Quality';
-    enableControls(); // Re-enable controls
+    btnLabel.textContent = originalText;
+    optimizeSizeButton.disabled = false;
+    toast(
+        `Optimized → ${formatBytes(bestSize)} at ${bestQ}% quality`,
+        'success',
+    );
 }
 
-// Initial setup or maybe hide controls until image is loaded?
-// For now, they are visible by default. You could add logic here
-// to hide dimension/quality controls and the download link initially. 
+function canvasSize(quality, mime = 'image/jpeg') {
+    return new Promise(resolve => {
+        previewCanvas.toBlob(blob => resolve(blob ? blob.size : Infinity), mime, quality);
+    });
+}
+
+// ---------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------
+function formatBytes(n) {
+    if (!n || n < 0) return '—';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(n < 10 * 1024 * 1024 ? 2 : 1)} MB`;
+}
+
+function toast(msg, kind = 'default') {
+    const el = document.getElementById('toast');
+    el.className = 'toast ' + (kind === 'danger' ? 'danger' : kind === 'success' ? 'success' : '');
+    el.innerHTML = iconForKind(kind) + `<span>${escapeHTML(msg)}</span>`;
+    void el.offsetWidth;
+    el.classList.add('visible');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove('visible'), 2800);
+}
+function iconForKind(kind) {
+    if (kind === 'danger')  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+    if (kind === 'success') return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+}
+function escapeHTML(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* ---------------------------------------------------------
+   Support dialog (shared across vijay.tools)
+--------------------------------------------------------- */
+const BMC_UPI_ID   = 'vijaygupta1818@ptyes';
+const BMC_UPI_NAME = 'Vijay Gupta';
+const BMC_TN       = 'vijay.tools support';
+
+function buildUpiIntent(amount) {
+    const params = new URLSearchParams({ pa: BMC_UPI_ID, pn: BMC_UPI_NAME, cu: 'INR', tn: BMC_TN });
+    if (amount) params.set('am', String(amount));
+    return `upi://pay?${params.toString()}`;
+}
+
+function wireSupportDialog() {
+    const dialog  = document.getElementById('supportDialog');
+    const copyBtn = document.getElementById('supportCopyBtn');
+    const amt49   = document.getElementById('amount49');
+    const amt99   = document.getElementById('amount99');
+    if (!dialog) return;
+
+    if (amt49) amt49.href = buildUpiIntent(49);
+    if (amt99) amt99.href = buildUpiIntent(99);
+
+    const open = () => {
+        dialog.classList.add('open');
+        dialog.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    };
+    const close = () => {
+        dialog.classList.remove('open');
+        dialog.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    };
+
+    document.querySelectorAll('[data-open="support"], #supportFab').forEach(el => {
+        el.addEventListener('click', open);
+    });
+    dialog.addEventListener('click', e => {
+        if (e.target.closest('[data-close]')) close();
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && dialog.classList.contains('open')) close();
+    });
+
+    if (copyBtn) {
+        const icon = document.getElementById('supportCopyIcon');
+        const original = icon ? icon.innerHTML : '';
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(BMC_UPI_ID);
+                copyBtn.classList.add('copied');
+                if (icon) icon.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
+                setTimeout(() => {
+                    copyBtn.classList.remove('copied');
+                    if (icon) icon.innerHTML = original;
+                }, 2000);
+            } catch {
+                toast('Copy failed — long-press to copy manually', 'danger');
+            }
+        });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', wireSupportDialog);
